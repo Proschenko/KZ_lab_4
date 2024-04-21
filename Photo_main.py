@@ -5,21 +5,20 @@ import matplotlib.pyplot as plt
 #region 1
 
 def apply_edge_detection(image):
-    # Преобразование изображения в оттенки серого
     gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-
-    # Применение алгоритма Кэнни для поиска краев
     edges_canny = cv2.Canny(gray_image, 50, 150)
-
     return edges_canny
 
-
-
-def apply_segmentation(image, edges_sobel):
-    # Применение маски изображения на основе обнаруженных краев
-    segmented_image = cv2.bitwise_and(image, image, mask=edges_sobel)
-
+def apply_segmentation(image, edges):
+    edges = cv2.threshold(edges, 0, 255, cv2.THRESH_BINARY)[1]
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
+    closed_edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel)
+    contours, _ = cv2.findContours(closed_edges.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    segmented_image = np.zeros_like(image)
+    cv2.drawContours(segmented_image, contours, -1, (255, 255, 255), thickness=cv2.FILLED)
     return segmented_image
+
+
 
 def display_task_2(image, edges_sobel, segmented_image):
     fig, axes = plt.subplots(1, 3, figsize=(15, 10))
@@ -29,7 +28,7 @@ def display_task_2(image, edges_sobel, segmented_image):
     axes[0].axis('off')
 
     axes[1].imshow(edges_sobel, cmap='gray')
-    axes[1].set_title('Edges (Sobel)')
+    axes[1].set_title('Edges (Kanny)')
     axes[1].axis('off')
 
     axes[2].imshow(segmented_image, cmap='gray')
@@ -179,27 +178,28 @@ def count_peaks(histogram):
 
 # region 3
 # Функция для применения адаптивного порогового метода
+def apply_adaptive_thresholding(image, k_size, c_method='mean', t_value=5):
+    adaptive_image = np.zeros_like(image)
+    rows, cols = image.shape
 
-def apply_adaptive_thresholding(image, k_size, c_method='mean', threshold_type=cv2.THRESH_BINARY, t_value=5):
-    # Применение адаптивного порогового метода
-    k2_size = k_size*2+1
-    if c_method == 'mean':
-        adaptive_image = cv2.adaptiveThreshold(image, 255, cv2.ADAPTIVE_THRESH_MEAN_C, threshold_type, k2_size, t_value)
-    elif c_method == 'median':
-        adaptive_image = cv2.adaptiveThreshold(image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, threshold_type, k2_size, t_value)
-    elif c_method == 'min_max':
-        adaptive_image = cv2.adaptiveThreshold(image, 255, cv2.ADAPTIVE_THRESH_MEAN_C, threshold_type, k2_size, t_value)
-
-        # Вычисление окрестности для каждого пикселя
-        neighborhood = cv2.boxFilter(image, -1, (k2_size, k2_size))
-
-        # Применение порога для каждого пикселя на основе окрестности
-        for i in range(image.shape[0]):
-            for j in range(image.shape[1]):
-                neighborhood_array = neighborhood[i:i+k2_size, j:j+k2_size]
-                c_value = (int(np.min(neighborhood_array)) + int(np.max(neighborhood_array))) / 2
-                if image[i, j] - c_value > t_value:
-                    adaptive_image[i, j] = 255
+    # Применение порога для каждого пикселя на основе окрестности
+    for i in range(rows):
+        for j in range(cols):
+            min_row = max(0, i - k_size)
+            max_row = min(image.shape[0], i + k_size + 1)
+            min_col = max(0, j - k_size)
+            max_col = min(image.shape[1], j + k_size + 1)
+            neighborhood_array = image[min_row:max_row, min_col:max_col]
+            if c_method == 'mean':
+                c_value = np.mean(neighborhood_array)
+            elif c_method == 'median':
+                c_value = np.median(neighborhood_array)
+            elif c_method == 'min_max':
+                c_value = (np.min(neighborhood_array) + np.max(neighborhood_array)) / 2
+            else:
+                c_value = 0
+            if image[i, j] - c_value > t_value:
+                adaptive_image[i, j] = 255
 
     return adaptive_image
 
@@ -305,40 +305,41 @@ if __name__ == "__main__":
 
     # region 3
     # Задание значений для сравнения
-    k_values = [3,  37]
-    c_methods = ['median', 'min_max']
-    t_values = [5,  10]
-
-
-    # Применение адаптивного порогового метода с различными параметрами
-    fig, axes = plt.subplots(len(k_values), len(c_methods) * len(t_values), figsize=(15, 10))
-
-    for i, k in enumerate(k_values):
-        for j, c_method in enumerate(c_methods):
-            for l, t_value in enumerate(t_values):
-                # Применение адаптивного порогового метода
-                adaptive_image = apply_adaptive_thresholding(image, k, c_method, cv2.THRESH_BINARY, t_value)
-
-                # Отображение результата
-                axes[i, j * len(t_values) + l].imshow(adaptive_image, cmap='gray')
-                axes[i, j * len(t_values) + l].set_title(f'k={k}, C={c_method}, T={t_value}')
-                axes[i, j * len(t_values) + l].axis('off')
-
-
-    plt.tight_layout()
-    plt.show()
+    # k_values = [3,  37]
+    # c_methods = ['median', 'min_max']
+    # t_values = [5,  10]
+    #
+    #
+    # # Применение адаптивного порогового метода с различными параметрами
+    # fig, axes = plt.subplots(len(k_values), len(c_methods) * len(t_values), figsize=(15, 10))
+    #
+    # for i, k in enumerate(k_values):
+    #     for j, c_method in enumerate(c_methods):
+    #         for l, t_value in enumerate(t_values):
+    #             # Применение адаптивного порогового метода
+    #
+    #             adaptive_image = apply_adaptive_thresholding(image, k, c_method, t_value)
+    #
+    #             # Отображение результата
+    #             axes[i, j * len(t_values) + l].imshow(adaptive_image, cmap='gray')
+    #             axes[i, j * len(t_values) + l].set_title(f'k={k}, C={c_method}, T={t_value}')
+    #             axes[i, j * len(t_values) + l].axis('off')
+    #
+    #
+    # plt.tight_layout()
+    # plt.show()
 
     k_values = [3, 37]
     c_methods = ['mean']
     t_values = [5, 10]
 
-    fig, axes = plt.subplots(len(k_values), len(c_methods) * len(t_values), figsize=(15, 10))
+    fig, axes = plt.subplots(len(k_values), len(c_methods) * len(t_values), figsize=(9, 9))
 
     for i, k in enumerate(k_values):
         for j, c_method in enumerate(c_methods):
             for l, t_value in enumerate(t_values):
                 # Применение адаптивного порогового метода
-                adaptive_image = apply_adaptive_thresholding(image, k, c_method, cv2.THRESH_BINARY, t_value)
+                adaptive_image = apply_adaptive_thresholding(image, k, c_method, t_value)
 
                 # Отображение результата
                 axes[i, j * len(t_values) + l].imshow(adaptive_image, cmap='gray')
